@@ -1,0 +1,81 @@
+with pl as
+(
+select  video_orientation,device_orientation,
+ sum(clicks)/nullif(sum(starts),0) as CTR,
+  sum(installs)/ifnull((sum(starts)/1000),0) as IPM,
+  sum(installs)/ifnull(sum(starts),0) as conversion_rate
+from sales_reporting.ads_events_hourly 
+where ts>='2020-06-01' and
+ device_orientation='portrait' and 
+ video_orientation='landscape' and 
+ starts>0 and 
+ 
+campaign_id in (select campaign_id from 
+ sales_reporting.ads_events_hourly where ts>='2020-06-01' 
+group by 1
+order by sum(spend) desc
+limit 100)
+group by 1,2
+  ),
+pp as
+(
+select  video_orientation,device_orientation,
+ sum(clicks)/nullif(sum(starts),0) as CTR,
+  sum(installs)/ifnull((sum(starts)/1000),0) as IPM,
+  sum(installs)/ifnull(sum(starts),0) as conversion_rate
+from sales_reporting.ads_events_hourly 
+where ts>='2020-06-01' and
+ device_orientation='portrait' and 
+ video_orientation='portrait' and 
+ starts>0 and 
+ 
+campaign_id in (select campaign_id from 
+ sales_reporting.ads_events_hourly where ts>='2020-06-01' 
+group by 1
+order by sum(spend) desc
+limit 100)
+group by 1,2
+  ),
+lp as
+(
+select  video_orientation,device_orientation,
+ sum(clicks)/nullif(sum(starts),0) as CTR,
+  sum(installs)/ifnull((sum(starts)/1000),0) as IPM,
+  sum(installs)/ifnull(sum(starts),0) as conversion_rate
+from sales_reporting.ads_events_hourly 
+where ts>='2020-06-01' and
+ device_orientation='landscape' and 
+ video_orientation='portrait' and 
+ starts>0 and 
+ 
+campaign_id in (select campaign_id from 
+ sales_reporting.ads_events_hourly where ts>='2020-06-01' 
+group by 1
+order by sum(spend) desc
+limit 100)
+group by 1,2
+  ),
+ll as
+(
+select  video_orientation,device_orientation,
+ sum(clicks)/nullif(sum(starts),0) as CTR,
+  sum(installs)/ifnull((sum(starts)/1000),0) as IPM,
+  sum(installs)/ifnull(sum(starts),0) as conversion_rate
+from sales_reporting.ads_events_hourly 
+where ts>='2020-06-01' and
+ device_orientation='landscape' and 
+ video_orientation='landscape' and 
+ starts>0 and 
+ 
+campaign_id in (select campaign_id from 
+ sales_reporting.ads_events_hourly where ts>='2020-06-01' 
+group by 1
+order by sum(spend) desc
+limit 100)
+group by 1,2
+  )
+
+select * from ll union all 
+select * from lp union all
+select * from pp union all
+select * from pl
