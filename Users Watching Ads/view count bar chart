@@ -1,0 +1,39 @@
+with avg_7d AS
+(
+SELECT 
+date,
+source_id,
+sum(impressions) as impressions_total,
+sum(distinct_uid_impression) as distinct_uid_impressions
+-- sum(impressions)*1.0/sum(distinct_uid_impressions) AS ads_watched_per_watchr_per_day
+FROM unique_users.day_country_source 
+WHERE [date=daterange] and [country=Country]
+  -- "time" >= getdate() - INTERVAL '7 days'
+AND distinct_uid_request > 0
+AND impressions > 0
+GROUP BY 1,2
+ORDER BY 4 DESC
+LIMIT 1000000
+),
+data1 AS
+(
+SELECT distinct
+source_id,
+ROUND(sum(impressions_total)*1.0/sum(distinct_uid_impressions),0) AS avg_ads_watched_per_watchr
+FROM avg_7d
+group by 1
+),
+data2 AS
+(
+SELECT
+avg_ads_watched_per_watchr,
+count(*) AS frequency
+FROM data1
+GROUP BY 1
+)
+SELECT
+avg_ads_watched_per_watchr,
+sum(frequency)/(SELECT SUM(frequency)*1.0 FROM data2)
+FROM data2
+GROUP BY 1
+ORDER BY 1 ASC
