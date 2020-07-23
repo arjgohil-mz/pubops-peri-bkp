@@ -1,0 +1,77 @@
+with data as
+(
+select 
+  target_id,
+  target_name,
+  case when (gda.platform='android' and split(category_ids,',')[SAFE_ORDINAL(1)]='13') then '12'
+       when (gda.platform='ios' and split(category_ids,',')[SAFE_ORDINAL(1)] in ('4','7')) then '3'
+      else split(category_ids,',')[SAFE_ORDINAL(1)] 
+  end as source1,
+  gda.platform,
+  country,
+  /**
+           case when dynamicpricingflag is null then 'Non Audience PinPointer Campaign' 
+  when dynamicpricingflag='scale_user_value_by_roas_target' then 'ROAS' 
+  when dynamicpricingflag='scale_base_cpi_by_retention' then 'CPI' 
+  
+  else dynamicpricingflag end as campaign_type,
+  **/
+  sum(installs) as installs,
+  sum(spend) as spend,
+  sum(starts) as starts,
+  sum(clicks) as clicks,
+  sum(installs)/(sum(starts)/1000) as IPM 
+from reportingads.gameads_daily_aggregates gda
+join gameads.game_profiles gp on gp.game_id=gda.target_id
+ # join gameads.campaigns c on c.game_id=gda.target_id
+
+where
+#target_developer_id != 999999 And
+target_developer_id not in ([Hypercasual]) And
+   is_coppa_targeted = ([COPPA_Targeted]) And
+  [time=DateRange]
+  and starts>0
+ #and country='US'  and gda.platform='ios'
+#and split(category_ids,',')[SAFE_ORDINAL(1)] ='3'
+group by 1,2,3,4,5
+  #,6
+)
+,second as
+(
+select * ,
+ntile(3) OVER (partition by source1, country, platform ORDER BY ipm) bucket_group
+from data
+  #  where [campaign_type=Campaign_Types]
+
+
+),
+final as
+(
+select target_name,source1,platform,country,
+case when bucket_group = 1 then ipm end as low,
+case when bucket_group = 2 then ipm end as mid,
+case when bucket_group = 3 then ipm end as high
+from second
+)
+select
+case when (final.platform='ios' and category_name='Arcade') then 'Casual'
+when lower(target_name) like '%idle%' then 'Idle'
+
+else
+category_name end as category_name, 
+final.platform,
+#final.country,region,
+avg(low) as low_ipm,
+avg(mid) as mid_ipm,
+avg(high) as high_ipm
+from final
+ join lookups.category_mapping cm on final.source1 = cm.category_id
+  and final.platform = cm.platform
+join lookups.country_region_mapping rm on final.country=rm.country
+where [final.platform=Platform] and [region=Region_filter] and [final.country=Country] 
+and final.country not in ('[Exclude_Countries]')
+and  category_name not in ('Educational' ,'Family','Finance','Food & Drink','Health & Fitness','Medical','Music','News','Shopping','Social Networking','News & Magazines','Social','Sports','Kids')
+group by 1,2
+having [category_name=Category_select]
+#,3,4
+order by 1
