@@ -1,0 +1,48 @@
+with raw_data as (
+select
+gp_source.category_ids as source_category,
+gp_target.category_ids as target_category,
+sum(starts) as starts,
+sum(revenue) as revenue,
+sum(spend) as spend,
+sum(installs) as installs
+from reportingads.gameads_daily_aggregates gda
+inner join (select game_id, platform, category_ids from gameads.game_profiles group by 1,2,3) gp_source on gda.source_id = gp_source.game_id
+inner join (select game_id, platform, category_ids from gameads.game_profiles group by 1,2,3) gp_target on gda.target_id = gp_target.game_id
+where time >= timestamp_sub([most_recent_date], interval 7 day)
+and [gda.country=Country]
+and [CAST(target_id AS STRING)=TargetGameIdGameAdsAggregates]
+and [CAST(source_id AS STRING)=SourceGameIdGameAdsAggregates]  
+and [CAST(target_developer_id AS STRING)=TargetDeveloperId]
+and [CAST(source_developer_id AS STRING)=SourceDeveloperId]
+and gp_source.platform='android'
+and gp_target.category_ids != '' and gp_source.category_ids != ''
+group by 1,2
+-- having sum(spend)>100
+),
+final as (
+  select
+  cmt1.category_name as TargetCategory,
+  cms1.category_name as SourceCategory,
+  starts,
+  installs,
+  installs/starts as CVR,
+  case when installs>0 then (spend/installs) else 0 end as CPI,
+  spend/starts*1000 as Spend_eCPM,
+  revenue/starts*1000 as Revenue_eCPM,
+  spend,
+  revenue
+  from raw_data td
+  left join lookups.category_mapping cmt1
+  on td.target_category = cmt1.category_id
+  left join lookups.category_mapping cms1
+  on td.source_category = cms1.category_id
+  where starts > 200 and 
+  cmt1.platform = 'android' and cms1.platform = 'android'
+  and installs > 10 
+  group by 1,2,3,4,5,6,7,8,9,10
+  order by 1,2
+)
+select * from final
+WHERE [targetCategory=TargetCategory]
+AND [sourceCategory=SourceCategory]
