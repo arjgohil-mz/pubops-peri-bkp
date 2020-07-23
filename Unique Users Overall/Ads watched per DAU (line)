@@ -1,0 +1,59 @@
+with game_stats AS
+(
+SELECT 
+#date as day,
+#format_date('%Y-%m', date) as month,
+  date_trunc(date, week) as month,
+
+source_id,
+split(category_ids,',')[SAFE_ORDINAL(1)] as Category1,
+platform,  
+sum(impressions) as impressions_total,
+sum(distinct_uid_impression) as distinct_uid_impressions,
+sum(distinct_uid_request) as distinct_uid_request,
+sum(revenue) as revenue,
+sum(requests) as requests
+FROM unique_users.day_country_source 
+    left join gameads.game_profiles gp on day_country_source.source_id=gp.game_id
+WHERE [date=daterange] and [country=Country] 
+  #and [cast(source_id as string)=sourceGameId] 
+AND distinct_uid_impression > 0
+AND distinct_uid_request > 0
+group by 1,2,3,4
+#ORDER BY 6 DESC 
+)
+SELECT
+#day,
+month,
+#category_name,
+gp.platform,
+#d.publisher_business_development_contact as cpma,
+#d.publisher_account_manager_contact as pub_ops,
+sum(impressions_total)*1.0 / sum(distinct_uid_impressions) as ads_watched_per_watchr,
+#sum(revenue) * 1.0/ sum(distinct_uid_impressions) as arpdau_per_watchr,
+sum(impressions_total)*1.0 / sum(distinct_uid_request) as ads_watched_per_DAU,
+#sum(revenue) * 1.0/ sum(distinct_uid_request) as arpdau,
+sum(distinct_uid_impressions)*1.0 / sum(distinct_uid_request) as share_of_watchrs_over_DAU,
+sum(requests)*1.0 / sum(distinct_uid_request) as ad_requests_per_DAU,
+avg(distinct_uid_impressions) AS avg_DAU_watching_ads,
+#avg(distinct_uid_request - distinct_uid_impressions) as avg_dau_not_watching_ads,
+#avg(distinct_uid_request) AS avg_DAU,
+sum(revenue) as revenue
+FROM game_stats gs
+left JOIN gameads.game_profiles gp
+  ON gp.game_id = gs.source_id
+left JOIN gameads.developers d
+  ON d.developer_id = gp.developer_id
+left join lookups.category_mapping c on gs.platform=c.platform and gs.Category1=c.category_id
+
+WHERE [gs.platform=Platform]
+and category_name is not null
+and [month=daterange]
+and [category_name=Category_select]
+
+and revenue>0
+GROUP BY 1,2
+#,7,8
+HAVING avg(distinct_uid_impressions) > 9
+ORDER BY 1,2,8 DESC
+limit 10000
