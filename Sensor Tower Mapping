@@ -1,0 +1,74 @@
+with source_list as
+(
+SELECT 
+ gp.store_id,
+  gp.game_id,
+  d.pubops,
+  d.cpma,
+  d.adops,
+  d.cppa,
+  sum(starts) as sstarts
+FROM `unity-ads-bi-prd.gameads.game_profiles` gp
+left join `unity-ads-bi-prd.dimension_data.developers` d on d.developer_id = gp.developer_id
+left join `unity-ads-bi-prd.reportingads.gameads_daily_aggregates` gda  on gda.source_id=gp.game_id 
+where gp.game_id in (select distinct source_id as game_id
+  from `unity-ads-bi-prd.reportingads.gameads_daily_aggregates` 
+  where time>= '2020-01-01'
+    and starts > 0) 
+    and gda.time>='2020-01-01'
+#and length(pubops)>0 and length(adops)>0
+group by 1,2,3,4,5,6
+),
+
+target_list as
+(
+ SELECT 
+ gp.store_id,
+  gp.game_id,
+  d.pubops,
+  d.cpma,
+  d.adops,
+  d.cppa,
+    sum(starts) as tstarts
+FROM `unity-ads-bi-prd.gameads.game_profiles` gp
+left join `unity-ads-bi-prd.dimension_data.developers` d on d.developer_id = gp.developer_id
+left join `unity-ads-bi-prd.reportingads.gameads_daily_aggregates` gda  on gda.target_id=gp.game_id 
+where gp.game_id in (select distinct target_id as game_id
+  from `unity-ads-bi-prd.reportingads.gameads_daily_aggregates` 
+  where time>= '2020-01-01'
+  and target_id not in (999999,999998)
+    and starts > 0) 
+#and length(pubops)>0 and length(adops)>0
+    and gda.time>='2020-01-01'
+#and store_id is not null
+group by 1,2,3,4,5,6
+)
+
+,final as(
+select 
+case when s.store_id is null then t.store_id else s.store_id end as store_id,
+s.game_id as source_id,
+t.game_id as target_id, 
+case when s.pubops is null then t.pubops else s.pubops end as pubops,
+case when s.cpma is null then t.cpma else s.cpma end as cpma,
+case when t.adops is null then s.adops else t.adops end as adops, 
+case when t.cppa is null then s.cppa else t.cppa end as cppa,
+ifnull(sstarts,0)+ifnull(tstarts,0) as starts
+from 
+source_list s  full join target_list t on s.store_id=t.store_id
+
+#where s.store_id is not null and s.game_id is not null and t.game_id is not null
+#where t.store_id='com.ohbibi.sup'
+
+),
+dedupe as
+(
+select *,row_number() over (partition by store_id order by starts  desc) as rn
+
+from final 
+  where store_id is not null
+
+)
+select store_id as id,source_id,target_id,pubops,cpma,adops,cppa from dedupe
+where rn=1
+order by 1
