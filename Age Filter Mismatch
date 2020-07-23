@@ -1,0 +1,11 @@
+select gp.developer_id,d.developer_name, game_name,gp.game_id,gp.store_id,gp.platform,gp.max_age_filter as Operate_age_limit , gp.age_limit as Appstore_age_limit, sum(gda.revenue) as revenue7D
+from gameads.game_profiles gp
+left join gameads.developers d on gp.developer_id=d.developer_id
+left join reportingads.gameads_daily_aggregates gda on gp.developer_id=gda.source_developer_id and gp.game_id=gda.source_id
+#left join arjun a on a.developer_id=gda.source_developer_id and a.game_id=gda.source_id
+
+where publisher_business_development_contact='jasmine@unity3d.com'
+and  cast(gda.time as date) >= DATE_ADD(CURRENT_DATE(), INTERVAL -7 DAY)
+and gp.max_age_filter !=age_limit
+group by 1,2,3,4,5,6,7,8
+order by 9 desc
