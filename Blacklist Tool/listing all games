@@ -1,0 +1,270 @@
+with active_campaigns as (
+select
+  target_id, target_developer_id, target_campaign, sum(spend) as total_spend
+from 
+  reportingads.gameads_daily_aggregates
+where 
+  time >= timestamp_sub(current_timestamp(), interval 30 day)
+  and target_id not in (999999,999998)
+  and target_id is not null
+group by 1,2,3
+having total_spend > 0
+order by 4 desc),
+game_data_raw as (
+  select 
+    ac.target_id as game_id, 
+    gp.game_name,
+    gp.platform,
+    gp.store_id,
+    -- gp.appstore_country,
+    gp.appstoreurl,
+    gp.is_coppa_targeted,
+    gp.age_limit,
+    gp.categories,
+    SPLIT(gp.categories, ',')[safe_ORDINAL(1)] AS source1,
+    SPLIT(gp.categories, ',')[safe_ORDINAL(2)]  AS source2,
+    SPLIT(gp.categories, ',')[safe_ORDINAL(3)]  AS source3
+from active_campaigns ac
+  left join gameads.game_profiles gp
+  on ac.target_id = gp.game_id
+group by 1,2,3,4,5,6,7,8,9,10,11),
+game_data as (
+  (select game_id, game_name, platform, store_id, -- appstore_country, 
+   appstoreurl, 
+    is_coppa_targeted, age_limit, categories as category_list,
+  case when source1 = '1' then 'Action'
+      when source1 = '2' then 'Adventure'
+      when source1  = '3'  then 'Arcade'
+      when source1  = '4' then 'Board'
+      when source1  = '5' then 'Card'
+      when source1  = '6' then 'Casino'
+      when source1  = '7' then 'Dice'
+      when source1  = '8'  then 'Educational'
+      when source1  = '9'  then 'Family'
+      when source1  = '10' then 'Kids'
+      when source1  = '11' then 'Music'
+      when source1  = '12' then 'Puzzle'
+      when source1  = '13' then 'Racing'
+      when source1  = '14' then 'Role Playing'
+      when source1  = '15' then 'Simulation'
+      when source1  = '16' then 'Sports'
+      when source1  = '17' then 'Strategy'
+      when source1  = '18' then 'Trivia'
+      when source1  = '19' then 'Word'
+      when source1  = '20' then 'Medical'
+      when source1  = '21' then 'Health & Fitness'
+      when source1  = '22' then 'Food & Drink'
+      when source1  = '23' then 'News'
+      when source1  = '24' then 'Finance'
+      when source1  = '25' then 'Social Networking'
+      when source1  = '26' then 'Shopping'
+      else 'None'
+      end as Category1,
+      case when source2 = '1' then 'Action'
+      when source2 = '2' then 'Adventure'
+      when source2  = '3'  then 'Arcade'
+      when source2  = '4' then 'Board'
+      when source2  = '5' then 'Card'
+      when source2  = '6' then 'Casino'
+      when source2  = '7' then 'Dice'
+      when source2  = '8'  then 'Educational'
+      when source2  = '9'  then 'Family'
+      when source2  = '10' then 'Kids'
+      when source2  = '11' then 'Music'
+      when source2  = '12' then 'Puzzle'
+      when source2  = '13' then 'Racing'
+      when source2  = '14' then 'Role Playing'
+      when source2  = '15' then 'Simulation'
+      when source2  = '16' then 'Sports'
+      when source2  = '17' then 'Strategy'
+      when source2  = '18' then 'Trivia'
+      when source2  = '19' then 'Word'
+      when source2  = '20' then 'Medical'
+      when source2  = '21' then 'Health & Fitness'
+      when source2  = '22' then 'Food & Drink'
+      when source2  = '23' then 'News'
+      when source2  = '24' then 'Finance'
+      when source2  = '25' then 'Social Networking'
+      when source2  = '26' then 'Shopping'
+      else 'None'
+      end as Category2,
+    case when source3 = '1' then 'Action'
+      when source3 = '2' then 'Adventure'
+      when source3  = '3'  then 'Arcade'
+      when source3  = '4' then 'Board'
+      when source3  = '5' then 'Card'
+      when source3  = '6' then 'Casino'
+      when source3  = '7' then 'Dice'
+      when source3  = '8'  then 'Educational'
+      when source3  = '9'  then 'Family'
+      when source3  = '10' then 'Kids'
+      when source3  = '11' then 'Music'
+      when source3  = '12' then 'Puzzle'
+      when source3  = '13' then 'Racing'
+      when source3  = '14' then 'Role Playing'
+      when source3  = '15' then 'Simulation'
+      when source3  = '16' then 'Sports'
+      when source3  = '17' then 'Strategy'
+      when source3  = '18' then 'Trivia'
+      when source3  = '19' then 'Word'
+      when source3  = '20' then 'Medical'
+      when source3  = '21' then 'Health & Fitness'
+      when source3  = '22' then 'Food & Drink'
+      when source3  = '23' then 'News'
+      when source3  = '24' then 'Finance'
+      when source3  = '25' then 'Social Networking'
+      when source3  = '26' then 'Shopping'
+      else 'None'
+      end as Category3
+  from game_data_raw
+  where platform = 'ios'
+group by 1,2,3,4,5,6,7,8,9,10,11)
+union all
+  (
+  select game_id, game_name, platform, store_id, -- appstore_country, 
+    appstoreurl, 
+    is_coppa_targeted, age_limit, categories as category_list,
+  case when source1 = '1' then 'Action'
+      when source1 = '2' then 'Adventure'
+      when source1  = '3'  then 'Arcade'
+      when source1  = '4' then 'Music'
+      when source1  = '5' then 'Role Playing'
+      when source1  = '6' then 'Simulation'
+      when source1  = '7' then 'Strategy'
+      when source1  = '8'  then 'Puzzle'
+      when source1  = '9'  then 'Educational'
+      when source1  = '10' then 'Card'
+      when source1  = '11' then 'Casino'
+      when source1  = '12' then 'Casual'
+      when source1  = '13' then 'Board'
+      when source1  = '14' then 'Family'
+      when source1  = '15' then 'Trivia'
+      when source1  = '16' then 'Word'
+      when source1  = '17' then 'Racing'
+      when source1  = '18' then 'Sports'
+      when source1  = '19' then 'Medical'
+      when source1  = '20' then 'Health & Fitness'
+      when source1  = '21' then 'News & Magazines'
+      when source1  = '22' then 'Finance'
+      when source1  = '23' then 'Social'
+      when source1  = '24' then 'Shopping'
+      else 'None'
+      end as Category1,
+        case when source2 = '1' then 'Action'
+      when source2 = '2' then 'Adventure'
+      when source2  = '3'  then 'Arcade'
+      when source2  = '4' then 'Music'
+      when source2  = '5' then 'Role Playing'
+      when source2  = '6' then 'Simulation'
+      when source2  = '7' then 'Strategy'
+      when source2  = '8'  then 'Puzzle'
+      when source2  = '9'  then 'Educational'
+      when source2  = '10' then 'Card'
+      when source2  = '11' then 'Casino'
+      when source2  = '12' then 'Casual'
+      when source2  = '13' then 'Board'
+      when source2  = '14' then 'Family'
+      when source2  = '15' then 'Trivia'
+      when source2  = '16' then 'Word'
+      when source2  = '17' then 'Racing'
+      when source2  = '18' then 'Sports'
+      when source2  = '19' then 'Medical'
+      when source2  = '20' then 'Health & Fitness'
+      when source2  = '21' then 'News & Magazines'
+      when source2  = '22' then 'Finance'
+      when source2  = '23' then 'Social'
+      when source2  = '24' then 'Shopping'
+      else 'None'
+      end as Category2,
+    case when source3 = '1' then 'Action'
+      when source3 = '2' then 'Adventure'
+      when source3  = '3'  then 'Arcade'
+      when source3  = '4' then 'Music'
+      when source3  = '5' then 'Role Playing'
+      when source3  = '6' then 'Simulation'
+      when source3  = '7' then 'Strategy'
+      when source3  = '8'  then 'Puzzle'
+      when source3  = '9'  then 'Educational'
+      when source3  = '10' then 'Card'
+      when source3  = '11' then 'Casino'
+      when source3  = '12' then 'Casual'
+      when source3  = '13' then 'Board'
+      when source3  = '14' then 'Family'
+      when source3  = '15' then 'Trivia'
+      when source3  = '16' then 'Word'
+      when source3  = '17' then 'Racing'
+      when source3  = '18' then 'Sports'
+      when source3  = '19' then 'Medical'
+      when source3  = '20' then 'Health & Fitness'
+      when source3  = '21' then 'News & Magazines'
+      when source3  = '22' then 'Finance'
+      when source3  = '23' then 'Social'
+      when source3  = '24' then 'Shopping'
+      else 'None'
+      end as Category3
+  from game_data_raw
+  where platform = 'android'
+group by 1,2,3,4,5,6,7,8,9,10,11))
+, blockers as
+(
+select 
+  gad.target_campaign,
+  gad.target_id as game_id,
+  gp.game_name,
+  gp.platform,
+  gad.target_developer_id,
+  d.developer_name,
+  d.publisher_account_manager_contact,
+  d.publisher_business_development_contact,
+  d.advertiser_account_manager_contact,
+  d.advertiser_business_development_contact,
+  gp.store_id,
+  -- gp.appstore_country,
+  gp.appstoreurl,
+  gp.category_list,
+  gp.Category1,
+  gp.Category2,
+  gp.Category3,
+  gp.is_coppa_targeted,
+  gp.age_limit,
+  c.start_date,
+  c.end_date,
+  c.countries,
+  ap.name as creative_name,
+  ap.landscape_endscreen as creative_landscape_endscreen,
+  ap.portrait_endscreen as creative_portrait_endscreen,
+  -- ap.trailer as creative_trailer,
+  ap.medium_quality_trailer as creative_medium_quality_trailer,
+  -- ap.high_quality_trailer as creative_high_quality_trailer,
+  ap.portrait_trailer as creative_portrait_trailer,
+  ap.type as creative_type,
+  gad.total_spend as spend30d
+from active_campaigns gad
+left join game_data gp
+  on gad.target_id = gp.game_id
+left join gameads.developers d  
+  on gad.target_developer_id = d.developer_id
+left join gameads.campaigns c
+  on gad.target_campaign = c.id
+left join gameads.assetpacks ap
+  on c.asset_pack = ap.id
+  
+where 
+  
+  #lower(gp.game_name) like '%[enter_keyword]%'
+  lower(replace(gp.game_name,' ','')) like lower(replace('%[enter_keyword]%',' ',''))
+  #lower(gp.game_name) like '%war%' 
+  /* 
+  or lower(gp.game_name) like '%marvel%' 
+  or lower(gp.game_name) like '%harry potter%' 
+  or lower(gp.game_name) like '%sniper%'
+  or lower(gp.game_name) like '%war%'
+  or lower(gp.game_name) like '%death%'
+  or lower(gp.game_name) like '%gun%'
+  or lower(gp.game_name) like '%kill%'*/
+  #[gp.game_name=game_name_test]
+)
+
+#select distinct store_id,game_name,spend90d, platform from blockers order by 3 desc
+
+select store_id,game_name,developer_name,sum(spend30d) as SpendInLast30Days, platform from blockers group by 1,2,3,5 order by 2,5,4 desc
