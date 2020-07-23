@@ -1,0 +1,32 @@
+with data as
+(
+select time, source_id,source_name,source_developer_id,d.name as developer_name, zone_id, 
+sum(starts) as starts, sum(impressions) as impressions, sum(revenue) as revenue
+
+ from reportingads.gameads_daily_aggregates gda 
+  left join dimension_data.developers d on d.developer_id=gda.source_developer_id 
+
+ where time='2020-03-23' and 
+  zone_id is not null and
+  [source_id=Enter_Source_ID] and
+  
+  #source_id =1380101  
+   # source_id in ([Enter_Source_ID]) and
+  
+  
+
+  #source_id in ([Source_ID_Jas]) and
+ #source_name in ('[Source_name_Jas]') and
+  #publisher_bd ='jasmine@unity3d.com'
+  [publisher_bd=CPMA]
+group by 1,2,3,4,5,6
+
+order by 7 desc
+ 
+ )
+ select developer_name,source_id,source_name,zone_id as placement_id from data 
+ where 
+ [developer_name=DeveloperNameId] and 
+  (revenue<=5 and starts<=10)
+
+order by 1,2
