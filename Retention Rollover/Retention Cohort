@@ -1,0 +1,91 @@
+WITH A
+AS
+(
+  #SELECT gamerid AS UserId,  DATE_DIFF(date '2019-05-25', date(eventTimestamp), day) as time_period, eventTimestamp from rawevents.ads_events_operativeecpm
+SELECT body.cinfo.audid AS UserId,  DATE_DIFF(date '2020-04-30', cast(submit_date as date), day) as time_period, submit_date as eventTimestamp from 
+  #rawevents.ea_users_daily_q1_q2
+  unity-ai-data-prd.ads_events.ads_events_operativeecpm_v0
+  #where [SourceGameId=GameID] and [DeveloperId=Developer_id] and [TargetGameID=TargetGameid] and eventTimestamp>'2019-05-25' 
+ where body.src in (1786932,1786931)  and submit_date>='2020-04-01' and submit_date<='2020-04-30'
+ 
+),
+
+LAG_LEAD AS 
+(
+SELECT DISTINCT userid, extract(day from eventTimestamp) AS day, eventTimestamp,time_period
+,
+lag(time_period,1) over (partition by USERID order by USERID, time_period) AS LAG,
+
+lead(time_period,1) over (partition by USERID ORDER by USERID, time_period) AS LEAD
+
+#FROM a  where UserId in (select UserId from a where time_period=0)
+FROM a  where UserId in (select UserId from a where eventTimestamp='2020-04-30')
+
+),
+
+lag_lead_with_diffs as (
+
+  select DISTINCT USERID, time_period, lag, lead, 
+
+    time_period-lag lag_size, 
+
+    lead-time_period lead_size, eventTimestamp
+
+  from lag_lead
+)
+
+,calculated AS 
+         (
+ SELECT USERID, time_period, eventTimestamp, 
+                case when lag is null then 'NEW'
+                     when lag_size = 1 then 'ACTIVE'
+                     when lag_size > 1 then 'RETURN'
+                end as this_day_value,
+                case when (lead_size > 1 OR lead_size IS NULL) then 'CHURN'
+                     else NULL
+                end as next_day_churn,
+                     COUNT(distinct USERID) AS CountOfUsers FROM lag_lead_with_diffs   group by USERID, TIME_PERIOD, eventTimestamp,  
+                case when lag is null then 'NEW'
+                     when lag_size = 1 then 'ACTIVE'
+                     when lag_size > 1 then 'RETURN'
+                END
+                , 
+                     case when (lead_size > 1 OR lead_size IS NULL) then 'CHURN'
+                     else NULL
+                END
+),
+/**
+ SELECT USERID, time_period, this_week_value, eventTimestamp,sum(CountOfUsers) as CountofUsers
+       from 
+       calculated 
+       WHERE  THIS_week_VALUE IS NOT NULL 
+#AND TIME_PERIOD IS NOT NULL
+       GROUP by USERID, calculated.time_period,calculated.this_week_value, eventTimestamp
+
+
+union all
+
+
+SELECT USERID, time_period+1 as time_period, 'CHURN',  eventTimestamp,CountOfUsers
+       from 
+       calculated  
+       WHERE  next_week_churn is not null 
+       #time_period = 0 
+       #AND this_week_value = 'NEW'
+       #AND TIME_PERIOD IS NOT NULL
+       #GROUP by USERID, calculated.time_period,calculated.this_week_value,eventTimestamp
+#order by 2
+
+**/
+finaldata as
+(
+select time_period, this_day_value, sum(CountOfUsers)  as CountOfUsers 
+  from calculated WHERE  THIS_day_VALUE IS NOT NULL AND TIME_PERIOD IS NOT NULL
+ group by 1,2
+union all
+select time_period+1 as time_period, 'CHURN', sum(CountOfUsers) 
+  from calculated where next_day_churn is not null
+  group by 1,2
+)
+
+SELECT * from finaldata where time_period<16
