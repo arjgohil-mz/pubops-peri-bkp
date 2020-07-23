@@ -1,0 +1,28 @@
+select
+  pdd.gameid,
+  game_profiles.game_name,
+  d.developer_name,
+  game_profiles.age_limit as app_store_age_limit,
+  game_profiles.max_age_filter as current_filter,
+  game_profiles.platform,
+  -- source_id,
+  sum(auctions) as requests,
+  sum(wins) as avails,
+  sum(impressions) as current_imps,
+  sum(revenue) as current_rev,
+  sum(revenue)/sum(impressions)*1000 as ecpm,
+  case when sum(wins) > 0 then sum(impressions)/sum(wins) else 0 end as show_rate,
+  sum(auctions) * (sum(impressions)/sum(wins)) as hundred_perc_fill_imps,
+  publisher_business_development_contact as cpma
+from reportingads.placement_daily_data_v2 pdd
+left join gameads.game_profiles on gameid = game_id
+left join gameads.developers d on game_profiles.developer_id = d.developer_id
+where date >= date_sub(current_date(), interval 60 day)
+  #and max_age_filter >= 13
+and age_limit >= 13
+  and is_coppa_targeted = true
+and [publisher_business_development_contact=CPMA]
+group by 1, 2 ,3 ,4 ,5, 6, 14
+having sum(impressions) > 10000
+  and sum(auctions) > 10000
+order by 8 desc,2
