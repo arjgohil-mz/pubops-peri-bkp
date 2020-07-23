@@ -1,0 +1,63 @@
+with data as(
+select 
+  split(category_ids,',')[SAFE_ORDINAL(1)] AS source1,
+  placementid,
+  country,
+  gp.platform,
+  gp.game_id,
+  game_name,
+   case when 
+ (gpz.allow_skip_video_in_seconds = -1 or gpz.allow_skip_video_in_seconds >= 25 or gpz.allow_skip_video_in_seconds = 0) then 'Rewarded'
+when
+ (gpz.allow_skip_video_in_seconds < 25 and gpz.allow_skip_video_in_seconds > 0 and lower(placementid) not like '%ban%') then 'Interstitial'
+ when 
+ (lower(placementid) like '%ban%') then 'Banner'
+ else ''
+ end as Placement_type,
+sum(wins) as fills, 
+sum(auctions) as auctions,
+ifnull(sum(wins),0)/ifnull(sum(auctions),0) as fillrate,
+sum(starts) as starts, 
+sum(spend) as spend, 
+sum(revenue) as revenue, 
+ifnull(sum(revenue),0)/ifnull(sum(impressions),0)*1000 as floor
+
+from reportingads.placement_daily_data_v2 gda
+left join gameads.game_profiles gp on gp.game_id=gda.gameid
+left join  gameads.game_profile_zones gpz on cast(gda.gameid as string)=gpz.game_id and lower(gda.placementid)=lower(gpz.id)
+
+where 
+  #gameid=3397998 and
+  [cast(gameid as string)=SourceGameId] and
+   #date='2020-03-15' and  
+  [date=DateRange] and
+  #placementid='rewardedVideoLine27_Android'
+  [placementid=Placement_Name_Select] and
+  [country=country] and
+  [platform=Platform_list]
+
+group by 1,2,3,4,5,6,7
+having (auctions>0 and sum(impressions)>0)
+order by 6 desc
+)
+select 
+
+#category_name, 
+case when (data.platform='ios' and category_name='Arcade') then 'Casual'
+else
+category_name end as category_name,
+game_id,
+game_name,
+
+avg(floor) as floor, 
+avg(fillrate) as fillrate
+
+from data
+  join lookups.category_mapping cm on data.source1 = cm.category_id
+    and data.platform = cm.platform
+join lookups.country_region_mapping rm on data.country=rm.country
+where [category_name=Category]
+and [Placement_type=PlacementType]
+group by 1,2,3
+having floor>0
+order by 1,4,5
