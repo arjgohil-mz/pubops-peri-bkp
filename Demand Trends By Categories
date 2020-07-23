@@ -1,0 +1,69 @@
+with data as
+(
+select 
+  target_name,
+split(category_ids,',')[SAFE_ORDINAL(1)] AS source1,
+  gda.platform,
+  country,
+  installs,
+  spend,
+  starts,
+  clicks
+  
+ 
+  
+from reportingads.gameads_daily_aggregates gda
+join gameads.game_profiles gp on gp.game_id=gda.target_id
+where
+#target_developer_id != 999999 And
+  target_developer_id not in ([Hypercasual]) And
+  is_coppa_targeted = ([COPPA_Targeted]) And
+  [time=DateRange]
+ # cast(time as date)>='2019-10-01' and cast(time as date)<='2019-12-31'
+#group by 1,2,3
+  )
+
+
+
+select 
+
+case when (data.platform='ios' and category_name='Arcade') then 'Casual'
+     when lower(target_name) like '%idle%' then 'Idle'
+
+else
+category_name
+end as category_name, 
+
+data.platform, data.country,region ,
+#CPI,CVR,IPM, eCPM 
+ case when sum(installs)>0 then
+sum(spend)/sum(installs) end as CPI,
+  
+  case when sum(starts)>0 then
+  sum(installs)/sum(starts)end as CVR,
+  
+  case when sum(starts)>0 then
+sum(installs)/(sum(starts)/1000) end as IPM,
+  
+  case when sum(starts)>0 then
+sum(spend)/sum(starts)*1000 end as eCPM,
+
+  case when sum(clicks)>0 then
+sum(installs)/sum(clicks) end as IR,
+
+case when sum(starts)>0 then
+  sum(clicks)/sum(starts) end as CTR
+  
+
+from data
+  join lookups.category_mapping cm on data.source1 = cm.category_id
+    and data.platform = cm.platform
+join lookups.country_region_mapping rm on data.country=rm.country
+where [data.platform=Platform] 
+and [region=Region_filter] 
+and [data.country=Country] 
+
+and data.country not in ('[Exclude_Countries]')
+group by 1,2,3,4
+having [category_name=Category_select]
+order by 1
