@@ -1,0 +1,118 @@
+with raw_data as (
+select
+  gda.platform as platform,
+  gp_source.category_ids as target_category,
+  split(gp_source.category_ids, ',')[SAFE_ORDINAL(1)] AS source1,
+  split(gp_source.category_ids, ',')[SAFE_ORDINAL(2)] AS source2,
+  split(gp_source.category_ids, ',')[SAFE_ORDINAL(3)]  AS source3,
+  sum(starts) as starts,
+  sum(revenue) as revenue,
+  sum(installs) as installs,
+  sum(spend) as spend
+  from reportingads.gameads_daily_aggregates gda
+  inner join gameads.game_profiles gp_source on gda.source_id = gp_source.game_id
+  where time >= timestamp_sub([most_recent_date],interval 7 day)
+  and [gda.country=Country]
+  and [CAST(target_id AS STRING)=TargetGameIdGameAdsAggregates]
+  and [CAST(source_id AS STRING)=SourceGameIdGameAdsAggregates]
+  and [CAST(target_developer_id AS STRING)=TargetDeveloperId]
+  and [CAST(source_developer_id AS STRING)=SourceDeveloperId]  
+  and gp_source.platform='ios'
+  and gp_source.category_ids != '' 
+  group by 1,2,3,4,5
+ having revenue >0),
+staging1 as 
+    (select
+     platform,
+     REGEXP_REPLACE(source1, ' ', '') as source,
+     sum(starts) as starts,
+     sum(revenue) as revenue,
+     sum(installs) as installs,
+     sum(spend) as spend
+     from raw_data 
+    where  source1 != ''
+     group by 1,2),
+staging2 as 
+    (select
+     platform,
+     REGEXP_REPLACE(source2, ' ', '') as source,
+     sum(starts) as starts,
+     sum(revenue) as revenue,
+     sum(installs) as installs,
+     sum(spend) as spend
+      from raw_data 
+    where source2 != ''
+     group by 1,2),
+staging3 as 
+    (select
+     platform,
+     REGEXP_REPLACE(source3, ' ', '') as source,
+     sum(starts) as starts,
+     sum(revenue) as revenue,
+     sum(installs) as installs,
+     sum(spend) as spend
+     from raw_data 
+     where source3 != '' 
+     group by 1,2),
+
+/*
+transformed_data as(
+    select
+     one.platform,
+     one.source as source_category,
+ coalesce(one.starts,0)+coalesce(two.starts,0)+coalesce(three.starts,0) as starts,
+ coalesce(one.revenue,0)+coalesce(two.revenue,0)+coalesce(three.revenue,0) as revenue,
+ coalesce(one.installs,0)+coalesce(two.installs,0)+coalesce(three.installs,0) as installs,
+ coalesce(one.spend,0)+coalesce(two.spend,0)+coalesce(three.spend,0) as spend 
+from staging1 one
+    left join staging2 two on one.source=two.source
+    left join staging3 three on one.source=three.source
+  group by 1,2,3,4,5,6
+),
+
+*/
+
+
+transformed_data AS (
+  
+SELECT  platform, 
+        source AS source_category,
+        SUM(starts) AS starts, 
+        SUM(revenue) AS revenue, 
+        SUM(installs) AS installs, 
+        SUM(spend) AS spend
+FROM (SELECT * FROM staging1 UNION ALL SELECT *FROM staging2 UNION ALL SELECT * FROM staging3)
+ GROUP BY 1,2
+  ),
+
+total_platform_starts as (
+  select
+  platform,
+  sum(starts) as platform_starts
+  from transformed_data
+  group by 1
+),
+
+final as (
+  select DISTINCT
+  td.platform,
+  cmt1.category_name as SourceCategory,
+  case when starts>0 then installs/starts else 0 end as CVR,
+  case when installs>0 then spend/installs else 0 end as CPI,
+  installs as installs,
+  case when starts>0 then spend/starts*1000 else 0 end as Spend_eCPM,
+  case when starts>0 then revenue/starts*1000 else 0 end as Revenue_eCPM,
+  revenue,
+--  starts/(SELECT platform_starts FROM total_platform_starts) AS category_start_makeup
+  starts/tps.platform_starts as category_start_makeup
+  from transformed_data td
+  left join lookups.category_mapping cmt1 
+  on td.source_category = cmt1.category_id AND td.platform = cmt1.platform
+  join total_platform_starts tps
+  on td.platform=tps.platform
+  -- group by 1,2,3,4,5,6,7,8,9
+  order by 2
+)
+
+select * from final
+WHERE [SourceCategory=SourceCategory]
