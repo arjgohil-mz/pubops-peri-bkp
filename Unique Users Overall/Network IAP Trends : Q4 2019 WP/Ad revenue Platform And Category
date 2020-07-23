@@ -1,0 +1,123 @@
+WITH
+  ads_raw AS (
+  SELECT
+    time,
+    source_id,
+    gp.platform,
+    gp.project_guid,
+    gp.category_ids,
+    split(gp.category_ids, ',')[SAFE_ORDINAL(1)] AS category,
+    SUM(starts) AS starts,
+    SUM(impressions) AS impressions,
+    SUM(clicks) AS clicks,
+    SUM(views) AS views,
+    SUM(installs) AS installs,
+    SUM(spend) AS spend,
+    SUM(revenue) AS revenue,
+    RANK() OVER (PARTITION BY time, project_guid, gp.platform ORDER BY SUM(starts) DESC) AS rank
+  FROM `unity-ads-bi-prd.reportingads.gameads_daily_aggregates` gda
+  LEFT JOIN `unity-ads-bi-prd.gameads.game_profiles` gp ON gda.source_id = gp.game_id
+  WHERE time >= '2019-01-01 00:00:00' and time <= '2019-12-31 00:00:00'
+  GROUP BY 1,2,3,4,5,6
+  HAVING
+    starts > 1),
+  ads AS (
+  SELECT
+    DATE(time) AS date,
+    c.category_name,
+    ads_raw.*
+  FROM
+    ads_raw
+  left join lookups.category_mapping c on c.platform = ads_raw.platform and c.category_id = ads_raw.category
+  WHERE
+    rank = 1),
+  blender AS (
+  SELECT
+    date,
+    upid,
+    platform,
+    dau_platform AS dau,
+    session_count_platform as session_count,
+    iap_verified_amount_platform AS iap_amount,
+    iap_verified_count_platform AS iap_transactions,
+    iap_verified_payers_platform AS iap_payers
+  FROM
+    `unity-ads-bi-prd.reportingads.blender_daily_data`
+  WHERE
+    date >= '2019-01-01' and date <= '2019-12-31'
+    #and upid <> '78236c5a-3ab5-43a7-8584-52bb8cb0b895'
+    AND country = 'null'
+    AND store = 'null'
+    AND platform != 'null'
+  GROUP BY 1,2,3,4,5,6,7,8
+  )
+, daily_game_agg as (
+SELECT
+  CASE
+    WHEN a.date IS NULL THEN b.date
+  ELSE
+  a.date
+END
+  AS date,
+  upid,
+  project_guid,
+  source_id,
+  (CASE
+      WHEN a.platform IS NULL THEN b.platform
+    ELSE
+    a.platform
+  END
+    ) AS platform,
+  category_name,
+  starts,
+  impressions,
+  clicks,
+  views,
+  installs,
+  spend,
+  revenue,
+  dau,
+  session_count,
+  iap_amount,
+  iap_transactions,
+  iap_payers,
+  case when iap_amount > 0 then iap_transactions / nullif(iap_payers,0) end as transactions_per_payer,
+  case when iap_amount > 0 then iap_payers / nullif(dau,0) end as payer_ratio,
+  case when iap_amount > 0 then session_count / nullif(dau,0) end as sessions_per_user
+FROM
+  ads a
+FULL OUTER JOIN
+  blender b
+ON
+  a.project_guid=b.upid
+  AND a.platform=b.platform
+  AND a.date=b.date
+where source_id is not null
+)
+, daily_category_agg as (
+select
+  date,
+  platform,
+  category_name,
+  sum(revenue) as revenue,
+  sum(iap_amount) as iap_amount,
+  sum(iap_transactions) as iap_transactions,
+  sum(transactions_per_payer) / sum(case when iap_amount > 0 then 1 else 0 end) as avg_transactions_per_payer,
+  sum(payer_ratio) / sum(case when iap_amount > 0 then 1 else 0 end) as avg_payer_ratio,
+  sum(sessions_per_user) / sum(case when iap_amount > 0 then 1 else 0 end) as avg_sessions_per_user
+from daily_game_agg
+group by 1,2,3
+)
+select
+  #platform,
+  category_name,
+  sum(revenue) as revenue,
+  sum(iap_amount) iap_amount,
+  sum(iap_amount) / nullif(sum(iap_transactions),0) as amount_per_transaction,
+  avg(avg_transactions_per_payer) as avg_daily_transactions_per_payer,
+  #avg(avg_payer_ratio) as avg_daily_payer_ratio,
+  avg(avg_sessions_per_user) as avg_daily_sessions_per_user
+  from daily_category_agg
+where category_name is not null
+  group by 1
+order by 1
