@@ -1,0 +1,37 @@
+with data as
+(
+select 
+  source_id,
+  platform,
+  split(category_ids,',')[SAFE_ORDINAL(1)] as Category1,
+  #format_date('%Y-%m', date) as month,
+  date_trunc(date, week) as month,
+  country, 
+  distinct_uid_request as Unique_Users ,
+  distinct_uid_installs as Unique_Installs,
+  distinct_new_uid_installs as New_Unique_Installs,
+  
+from unique_users.day_country_source dcs
+  left join gameads.game_profiles gp on dcs.source_id=gp.game_id
+#where [country=country]
+#and [platform=os_platform]
+)
+select
+  month,
+Category_name,
+d.platform,
+#country, 
+sum(Unique_Users) as Unique_Users,
+sum(Unique_Installs) as Unique_Installs,
+sum(New_Unique_Installs) as New_Unique_Installs
+
+from data d
+left join lookups.category_mapping c on d.platform=c.platform and d.Category1=c.category_id
+where 
+[month=daterange] and
+d.platform in ('ios','android')
+and Category_name is not null
+#and Category_name='Action'
+and [Category_name=Category_select]
+group by 1,2,3
+order by 1,2,4
