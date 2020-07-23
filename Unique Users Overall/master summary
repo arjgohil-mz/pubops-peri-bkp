@@ -1,0 +1,15 @@
+select 
+extract(month from date) as month, 
+FORMAT_DATETIME("%B", DATETIME(date)) as month_name,
+
+
+sum(distinct_uid_request) as distinct_uid_request , sum(distinct_uid_impression) as distinct_uid_impression,
+sum(distinct_new_uid_impression) as distinct_new_uid_impression,sum(distinct_uid_installs) as distinct_uid_installs,sum(distinct_new_uid_installs) as distinct_new_uid_installs,sum(spend) as spend, sum(revenue) as revenue
+#,*
+
+from unique_users.day_country_platform 
+where date>='2020-01-01'
+and country='US'
+and platform in ('ios','android')
+group by 1,2
+order by 1
