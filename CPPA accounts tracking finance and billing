@@ -1,0 +1,20 @@
+select 
+format_date("%Y %m", cast(time as date)) as month,
+case when length(advertiser_bd )>1 then advertiser_bd  else "Unmanaged" end as CPPA_id,
+case when length(r.name)>1 then r.name  else "Unmanaged" end as CPPA,
+target_developer_id,
+d.developer_name as Target_Developer_Name,
+target_id,target_name,
+platform,
+case when length(r.region)>1 then r.region  else "Unmanaged" end as Region,
+sum(installs) as Installs, 
+sum(spend) as Spend,
+sum(revenue) as Revenue
+from reportingads.gameads_daily_aggregates 
+left join gameads.developers d  on d.developer_id = target_developer_id
+left join lookups.sales_contact_region r on advertiser_bd = r.contact
+where [r.region=BD_region] and [publisher_bd=CPMA] and [time=DateRange] and [advertiser_bd=CPPA]
+group by 1,2,3,4,5,6,7,8,9 
+#order by month,installs desc
+order by 1,10 desc,4,6,8
+-- limit 999
