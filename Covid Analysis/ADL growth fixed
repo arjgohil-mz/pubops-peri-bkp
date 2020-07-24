@@ -1,0 +1,60 @@
+#select distinct(platform) from unity-ai-aggregate-data-prd.analytics_aggregate.app_platform where #submit_date='2020-02-02'
+
+
+with data as
+(
+select 
+EXTRACT(isoyear FROM CAST(submit_date AS date)) AS year,
+EXTRACT(isoweek FROM CAST(submit_date AS date)) AS week,
+ #appid,bundleid,
+
+case when platform in ('androidplayer','iphoneplayer','tizenplayer','blackberryplayer') then 'Mobile' 
+ when platform not in ('androidplayer','iphoneplayer','tizenplayer','blackberryplayer') and platform is not null  then 'HD'
+  when platform is null then 'Anonymous'
+end as
+platform,
+min(submit_date) as submit_date
+,sum(ifnull(mau,0)) as mau
+,sum(ifnull(dau,0)) as dau
+,sum(ifnull(dau,0))/sum(ifnull(mau,0)) as stickyness
+,avg(ifnull(day1ret,0)) as d1,avg(ifnull(day7ret,0)) as d7,avg(ifnull(day30ret,0))as d30
+  ,sum(ifnull(sessions,0)) as sessions
+  ,avg(ifnull(sessions_per_user_day,0)) as sessions_per_user_day
+  ,avg(ifnull(avg_session_duration,0)) as avg_session_duration
+  ,sum(ifnull(installs,0)) as installs
+from unity-ai-aggregate-data-prd.analytics_aggregate.app_platform 
+where 
+submit_date>='2018-12-30'
+and dau>1000
+group by 1,2,3
+having platform !='Anonymous'
+#order by submit_date,platform
+  )
+, first_week as
+(
+
+  SELECT
+    *
+  FROM
+    data
+  WHERE
+    week IN (1) 
+)
+select
+d.year , d.week , d.platform,d.submit_date,
+d.mau,(d.mau / f.mau)-1 as mau_grwth_pct
+,d.dau,(d.dau / f.dau)-1 as dau_grwth_pct
+,d.stickyness,(d.stickyness/f.stickyness)-1 as stickyness_grwth_pct
+,d.d1,(d.d1/f.d1)-1 as d1_grwth_pct
+,d.d7,(d.d7/f.d7)-1 as d7_grwth_pct
+,d.d30,(d.d30/f.d30)-1 as d30_grwth_pct
+,d.sessions,(d.sessions / f.sessions)-1 as session_grwth_pct
+,d.sessions_per_user_day,(d.sessions_per_user_day/f.sessions_per_user_day)-1 as sessions_per_user_day_grwth_pct
+,d.avg_session_duration,(d.avg_session_duration/f.avg_session_duration)-1 as sessions_duration_grwth_pct
+,d.installs,(d.installs /(f.installs+1))-1 as installs_grwth_pct
+
+FROM
+  data d
+left join first_week f on d.year = f.year and d.platform = f. platform
+where  d.week<=21
+order by submit_date,platform
