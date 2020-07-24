@@ -1,0 +1,109 @@
+WITH
+  ads_raw AS (
+  SELECT
+    time,
+    source_id,
+    gp.platform,
+    gp.project_guid,
+    SUM(starts) AS starts,
+    RANK() OVER (PARTITION BY time, project_guid, gp.platform ORDER BY SUM(starts) DESC) AS rank
+  FROM `unity-ads-bi-prd.reportingads.gameads_daily_aggregates` gda
+  LEFT JOIN `unity-ads-bi-prd.gameads.game_profiles` gp ON gda.source_id = gp.game_id
+  WHERE 
+    #time >= '2019-01-01 00:00:00' and time < '2019-11-01 00:00:00'
+    [time=DateRange]
+  GROUP BY 1,2,3,4
+  HAVING starts > 1
+  )
+, categories as (
+  select
+    game_id,
+    platform,
+    split(category_ids, ',')[SAFE_ORDINAL(1)] AS cat1
+  from gameads.game_profiles
+  )
+, ads AS (
+  SELECT
+    DATE(time) AS date,
+    REGEXP_REPLACE(c.cat1, ' ', '') as cat1,
+    ads_raw.*
+  FROM ads_raw
+  left join categories c on c.game_id = ads_raw.source_id
+  WHERE rank = 1
+  )
+, analytics as (
+  select
+    appid,
+    case 
+      when platformid = 11 then 'android'
+      when platformid = 8 then 'ios'
+    end as platform,
+    install_date,
+    day1ret,
+    day7ret,
+    day30ret
+  from `unity-ai-aggregate-data-prd.analytics_aggregate.uca_users`
+  where
+  #install_date >= '2019-01-01' and install_date < '2019-11-01'
+  [install_date=DateRange]
+    and platformid in (11,8)
+  )
+,  blender AS (
+  SELECT
+    date,
+    upid,
+    platform,
+    dau_platform AS dau
+  FROM
+    `unity-ads-bi-prd.reportingads.blender_daily_data`
+  WHERE
+   # date >= '2019-01-01' and date < '2019-11-01'
+  [date=DateRange]
+    AND country = 'null'
+    AND store = 'null'
+    AND platform != 'null'
+  )
+, agg as (  
+  select
+    appid,
+    analytics.platform,
+    install_date, 
+    dau,
+    count(*) as installed_users,
+    sum(day1ret) as d1_ret_users,
+    sum(day7ret) as d7_ret_users,
+    sum(day30ret) as d30_ret_users,
+    avg(day1ret) as d1_ret,
+    avg(day7ret) as d7_ret,
+    avg(day30ret) as d30_ret
+  from analytics
+  left join blender on analytics.appid = blender.upid
+    and analytics.platform = blender.platform
+    and analytics.install_date = blender.date
+  group by 1,2,3,4
+  )
+  SELECT
+    CASE WHEN a.date IS NULL THEN b.install_date ELSE a.date END AS date,
+    project_guid,
+    source_id,
+    CASE WHEN a.platform IS NULL THEN b.platform ELSE a.platform END AS platform,
+    category_name,
+    sum(starts) as starts,
+    sum(dau) as dau,
+--     sum(installed_users) as total_installed_users,
+--     sum(d1_ret_users) as d1_retained_users,
+--     sum(d7_ret_users) as d7_retained_users,
+--     sum(d30_ret_users) as d30_retained_users,
+    sum(d1_ret_users) / sum(installed_users) as d1_retention,
+    sum(d7_ret_users) / sum(installed_users) as d7_retention,
+    sum(d30_ret_users) / sum(installed_users) as d30_retention
+  FROM ads a
+  FULL OUTER JOIN agg b ON a.project_guid = b.appid
+    AND a.platform = b.platform
+    AND a.date = b.install_date
+  left join lookups.category_mapping on a.cat1 = category_mapping.category_id
+    and a.platform = category_mapping.platform
+  where source_id is not null
+    and dau > 1000
+  group by 1,2,3,4,5
+  order by 3,1
