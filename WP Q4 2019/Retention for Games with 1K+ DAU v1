@@ -1,0 +1,90 @@
+WITH
+  ads_raw AS (
+  SELECT
+    time,
+    source_id,
+    gp.platform,
+    gp.project_guid,
+    gp.category_ids,
+    split(gp.category_ids, ',')[SAFE_ORDINAL(1)] AS category,
+    SUM(starts) AS starts,
+    SUM(impressions) AS impressions,
+    SUM(clicks) AS clicks,
+    SUM(views) AS views,
+    SUM(installs) AS installs,
+    SUM(spend) AS spend,
+    SUM(revenue) AS revenue,
+    RANK() OVER (PARTITION BY time, project_guid, gp.platform ORDER BY SUM(starts) DESC) AS rank
+  FROM `unity-ads-bi-prd.reportingads.gameads_daily_aggregates` gda
+  LEFT JOIN `unity-ads-bi-prd.gameads.game_profiles` gp ON gda.source_id = gp.game_id
+  WHERE time >= '2019-01-01 00:00:00' and time < '2019-12-01 00:00:00'
+  GROUP BY 1,2,3,4,5,6
+  HAVING
+    #starts = 0),
+    starts > 1),
+  ads AS (
+  SELECT
+    DATE(time) AS date,
+    c.category_name,
+    ads_raw.*
+  FROM
+    ads_raw
+  left join lookups.category_mapping c on c.platform = ads_raw.platform and c.category_id = ads_raw.category
+  WHERE
+    rank = 1),
+  blender AS (
+  SELECT
+    date,
+    upid,
+    platform,
+    dau_platform AS dau,
+    day1_retention,
+    day7_retention,
+    session_count_platform as session_count,
+    iap_verified_amount_platform AS iap_amount,
+    iap_verified_count_platform AS iap_transactions,
+    iap_verified_payers_platform AS iap_payers
+  FROM
+    `unity-ads-bi-prd.reportingads.blender_daily_data`
+  WHERE
+    date >= '2019-01-01' and date < '2019-12-01'
+    and dau_platform>1000
+    AND country = 'null'
+    AND store = 'null'
+    AND platform != 'null'
+  GROUP BY 1,2,3,4,5,6,7,8,9,10
+  )
+
+SELECT
+  CASE
+    WHEN a.date IS NULL THEN b.date
+  ELSE
+  a.date
+END
+  AS date,
+  project_guid ,
+  source_id,
+  (CASE
+      WHEN a.platform IS NULL THEN b.platform
+    ELSE
+    a.platform
+  END
+    ) AS platform,
+  category_name,
+  starts,
+  dau,
+day1_retention,
+day7_retention
+
+FROM
+  ads a
+FULL OUTER JOIN
+  blender b
+ON
+  a.project_guid=b.upid
+  AND a.platform=b.platform
+  AND a.date=b.date
+where source_id is not null and dau is not null
+#and project_guid='69bd6973-f7e4-4427-8092-64c9f2d9ba5c' and a.platform='android'
+
+order by 3,1
