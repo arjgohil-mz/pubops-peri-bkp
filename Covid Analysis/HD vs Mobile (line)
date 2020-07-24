@@ -1,0 +1,21 @@
+select 
+EXTRACT(isoyear FROM CAST(submit_date AS date)) AS year,
+EXTRACT(isoweek FROM CAST(submit_date AS date)) AS week,
+ #appid,bundleid,
+
+case when platform in ('androidplayer','iphoneplayer') then 'Mobile' 
+ when platform not in ('androidplayer','iphoneplayer') or platform is null then 'HD'
+end as
+platform,
+submit_date
+,avg(mau) as mau,avg(dau) as dau,avg(dau)/avg(mau) as stickyness,avg(day1ret) as d1,avg(day7ret) as d7,avg(day30ret)as d30,avg(sessions) as sessions,avg(sessions_per_user_day) as session_per_user_per_day,avg(avg_session_duration) as avg_session_duration,avg(installs) as installs
+from unity-ai-aggregate-data-prd.analytics_aggregate.app_platform 
+where 
+submit_date>='2020-01-01'
+#and platform not like '%web%'
+#and appid like '%04d6ccc6-e376-4e93-8178-d7a620c48dd3%' --heartstone
+#and bundleid='com.blizzard.wtcg.hearthstone'
+#and platform='androidplayer'
+and dau>10000
+group by 1,2,3,4
+order by submit_date,platform
